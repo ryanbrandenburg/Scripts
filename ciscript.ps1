@@ -1,6 +1,8 @@
 param (
-   [string]$script
+   [string]$script,
+   [bool]$test = $true
 )
+$ErrorActionPreference = 'Stop'
 
 $cirepos = @(
     "Antiforgery",
@@ -82,18 +84,20 @@ foreach ($repo in $cirepos)
 		}
 	}
 }
-
-if (-Not ($allReposPresent))
-{
-	Write-Output "Not all repos are present, aborting." 
-	return
+try {
+    if (-Not ($allReposPresent))
+    {
+        Write-Output "Not all repos are present, aborting." 
+    }
+    else {
+            foreach ($repo in $cirepos)
+            {
+                Write-Output "START Repo: $repo"
+                & "$PSScriptRoot/$script" $repo $test
+                Write-Output "END Repo: $repo"
+            }
+    }
 }
-	
-foreach ($repo in $cirepos)
-{
-	Write-Output "START Repo: $repo"
-	& $script $repo
-	Write-Output "END Repo: $repo"
+finally{
+    Set-Location ".."
 }
-
-Set-Location ".."
