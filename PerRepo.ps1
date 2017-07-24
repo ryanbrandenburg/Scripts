@@ -1,8 +1,3 @@
-param (
-    [string]$repo,
-    [bool]$test
-)
-
 Function Set-File($match, $contents)
 {
     Set-Content -Path $match -Value $contents
@@ -41,7 +36,7 @@ Function PerRepo($repo, $test)
     
     $message = "Set AspNetCoreVersion"
     $newBranch = "rybrande/AspNetCoreVersion"
-    $match = 'build/dependencies.props'
+    $match = 'dependencies.props'
     $find = "<AspNetCoreVersion>2.0.0-*</AspNetCoreVersion>"
     $replace = "<AspNetCoreVersion>2.1.0-*</AspNetCoreVersion>"
 
@@ -73,5 +68,3 @@ Function PerRepo($repo, $test)
 
     Set-Location ".."
 }
-
-PerRepo $repo $test
