@@ -13,6 +13,7 @@ Function Update-File($match, $find, $replace)
         }
         else
         {
+            Write-Output "File: $path"
             if ((select-string -path $path -pattern $find -CaseSensitive)) {
                 $fileContent = get-content -Raw $path -Encoding UTF8
                 $fileContent = $fileContent -creplace $find, $replace
@@ -32,39 +33,41 @@ Function Update-File($match, $find, $replace)
 Function PerRepo($repo, $test)
 {
     Set-Location $repo
-    Write-Output "$repo"
-    
-    $message = "Set AspNetCoreVersion"
-    $newBranch = "rybrande/AspNetCoreVersion"
-    $match = 'dependencies.props'
-    $find = "<AspNetCoreVersion>2.0.0-*</AspNetCoreVersion>"
-    $replace = "<AspNetCoreVersion>2.1.0-*</AspNetCoreVersion>"
-
-    git branch -d $newBranch
-    git fetch
-    git checkout -tb $newBranch origin/dev
-    #git clean -xdf
-    
-    Write-Output "Test: $test"
-
-    $updateResult = Update-File $match $find $replace
-
-    if($updateResult -and !$test)
+    try
     {
-        Write-Output "Commiting"
-        # git commit -am $message
-        # Write-Output "Pushing $repo"
-        # git push origin $newBranch:dev
+        Write-Output "Repo: $repo"
+        
+        $message = "Set AspNetCoreVersion"
+        $newBranch = "rybrande/AspNetCoreVersion"
+        $match = 'dependencies.props'
+        $find = "<AspNetCoreVersion>2.0.0-*</AspNetCoreVersion>"
+        $replace = "<AspNetCoreVersion>2.1.0-*</AspNetCoreVersion>"
 
-        # $PRMessage = $message
+        git branch -d $newBranch
+        git fetch
+        git checkout -tb $newBranch origin/dev
+        #git clean -xdf
 
-        # Write-Output "Creating PR"
-        # hub pull-request -b dev -h $newBranch -m $PRMessage
+        $updateResult = Update-File $match $find $replace
+
+        if($updateResult -and !$test)
+        {
+            Write-Output "Commiting"
+            # git commit -am $message
+            # Write-Output "Pushing $repo"
+            # git push origin $newBranch:dev
+
+            # $PRMessage = $message
+
+            # Write-Output "Creating PR"
+            # hub pull-request -b dev -h $newBranch -m $PRMessage
+        }
+        else
+        {
+            Write-Output "Didn't commit cause this is a test."
+        }
     }
-    else
-    {
-        Write-Output "Didn't commit cause this is a test."
+    finally{
+        Set-Location ".."
     }
-
-    Set-Location ".."
 }
