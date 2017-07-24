@@ -93,7 +93,8 @@ try {
             foreach ($repo in $cirepos)
             {
                 Write-Output "START Repo: $repo"
-                & "$PSScriptRoot/$script" $repo $test
+                . "$PSScriptRoot/PerRepo.ps1"
+                PerRepo $repo $test
                 Write-Output "END Repo: $repo"
             }
     }

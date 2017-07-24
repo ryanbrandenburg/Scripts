@@ -9,7 +9,7 @@ Function Set-File($match, $contents)
     return $true
 }
 
-Function Replace($match, $find, $replace)
+Function Update-File($match, $find, $replace)
 {
     foreach ($path in Get-ChildItem -recurse -include $match | Where-Object { test-path $_.fullname -pathtype leaf} ) {
         if ((Select-String -path $path -pattern $replace -CaseSensitive))
@@ -23,6 +23,8 @@ Function Replace($match, $find, $replace)
                 $fileContent = $fileContent -creplace $find, $replace
                 
                 [IO.File]::WriteAllText($path, $fileContent, [Text.Encoding]::UTF8)
+                . "$PSScriptRoot/Remove-Utf8BOM.ps1"
+                Remove-Utf8BOM $path
 
                 return $true
             }
@@ -32,36 +34,32 @@ Function Replace($match, $find, $replace)
     return $false
 }
 
-Function Append($match, $data)
-{
-
-    if (Test-Path $match)
-    {
-        Add-Content $match $data
-    }
-}
-
-Function Main($repo, $test)
+Function PerRepo($repo, $test)
 {
     Set-Location $repo
+    Write-Output "$repo"
     
-    $message = "Move to the new KoreBuild"
-    $newBranch = "rybrande/KoreBuild"
-    $match = 'build.ps1'
-    $content = "Fake!"
+    $message = "Set AspNetCoreVersion"
+    $newBranch = "rybrande/AspNetCoreVersion"
+    $match = 'build/dependencies.props'
+    $find = "<AspNetCoreVersion>2.0.0-*</AspNetCoreVersion>"
+    $replace = "<AspNetCoreVersion>2.1.0-*</AspNetCoreVersion>"
 
+    git branch -d $newBranch
     git fetch
     git checkout -tb $newBranch origin/dev
-    git clean -xdf
+    #git clean -xdf
     
     Write-Output "Test: $test"
 
-    if((Set-File $match $content) -and !$test)
+    $updateResult = Update-File $match $find $replace
+
+    if($updateResult -and !$test)
     {
         Write-Output "Commiting"
         # git commit -am $message
         # Write-Output "Pushing $repo"
-        # git push -f origin $newBranch
+        # git push origin $newBranch:dev
 
         # $PRMessage = $message
 
@@ -76,4 +74,4 @@ Function Main($repo, $test)
     Set-Location ".."
 }
 
-Main $repo $test
+PerRepo $repo $test
