@@ -4,6 +4,7 @@ param (
 
 $cirepos = @(
     "Antiforgery",
+    "AspNetCoreModule",
     "AzureIntegration",
     "BasicMiddleware",
     "BrowserLink",
