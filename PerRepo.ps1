@@ -1,73 +1,114 @@
-Function Set-File($match, $contents)
-{
+Function Set-File($match, $contents) {
     Set-Content -Path $match -Value $contents
     return $true
 }
 
-Function Update-File($match, $find, $replace)
-{
-    foreach ($path in Get-ChildItem -recurse -include $match | Where-Object { test-path $_.fullname -pathtype leaf} ) {
-        if ((Select-String -path $path -pattern $replace -CaseSensitive))
-        {
-            Write-Output "$path has already been worked on. Skipping."
-        }
-        else
-        {
-            Write-Output "File: $path"
-            if ((select-string -path $path -pattern $find -CaseSensitive)) {
-                $fileContent = get-content -Raw $path -Encoding UTF8
-                $fileContent = $fileContent -creplace $find, $replace
-                
-                [IO.File]::WriteAllText($path, $fileContent, [Text.Encoding]::UTF8)
-                . "$PSScriptRoot/Remove-Utf8BOM.ps1"
-                Remove-Utf8BOM $path
+Function Replace-File($source, $destination) {
+    Copy-Item -Path $source -Destination $destination -Force
+    return $true
+}
 
-                return $true
-            }
+Function Update-Files($path, $match, $find, $replace) {
+    if (Test-Path $path) {
+        Write-Output "$path found"
+        $csprojs = Get-ChildItem -Path $path -Include $match -Recurse -File
+        foreach ($csproj in $csprojs) {
+            Write-Output "Updating $($csproj.FullName)"
+            Update-File $csproj.FullName $find $replace
         }
+    }
+}
+
+Function Update-Regex($path, $regex, $replace) {
+    $content = Get-Content $path -Raw
+    $content = $content -replace $regex, $replace
+
+    Set-Content -Path $path -Value $content -NoNewline
+}
+
+Function Update-File($path, $find, $replace) {
+    $fileContent = Get-Content $path -Raw -Encoding UTF8
+    if ($fileContent -eq $null) {
+        return $false
+    }
+
+    if ($fileContent.Contains($find)) {
+        $fileContent.replace($find, $replace) | Set-Content -Path $path -NoNewline
+
+        $fileInfo = Get-Item $path
+
+        . "$PSScriptRoot/Remove-Utf8BOM.ps1"
+        Remove-Utf8BOM $fileInfo -Verbose
+
+        return $true
+    }
+    else {
+        $fileContent = get-content -Raw $path -Encoding UTF8
+        Write-Output "Couldn't find '$find' in '$fileContent'"
     }
 
     return $false
 }
 
-Function PerRepo($repo, $test)
-{
-    Set-Location $repo
-    try
-    {
-        Write-Output "Repo: $repo"
-        
-        $message = "Set AspNetCoreVersion"
-        $newBranch = "rybrande/AspNetCoreVersion"
-        $match = 'dependencies.props'
-        $find = "<AspNetCoreVersion>2.0.0-*</AspNetCoreVersion>"
-        $replace = "<AspNetCoreVersion>2.1.0-*</AspNetCoreVersion>"
+Function Create-PR($newBranch, $prMessage) {
+    hub pull-request -m `"$prMessage`" -b dev -h $newBranch 
+}
 
-        git branch -d $newBranch
+Function Exists-InFile($string, $file) {
+    return Select-String -Pattern $string -Path $file -Quiet 
+}
+
+Function PerRepo($repo, $test) {
+    Push-Location $repo
+    try {
+        $message = "Adding VSTS file"
+        $newBranch = "rybrande/VSTS"
+
+        $upstreamBranch = "origin/dev"
+
         git fetch
-        git checkout -tb $newBranch origin/dev
-        #git clean -xdf
+        git checkout .
+        git checkout $upstreamBranch
+        git branch -D $newBranch
 
-        $updateResult = Update-File $match $find $replace
+        git checkout -tb $newBranch $upstreamBranch
+        git clean -xdf
 
-        if($updateResult -and !$test)
-        {
-            Write-Output "Commiting"
-            # git commit -am $message
-            # Write-Output "Pushing $repo"
-            # git push origin $newBranch:dev
+        Write-Output "Creating folder"
+        
+        $buildDir = ".vsts-pipelines/builds"
 
-            # $PRMessage = $message
-
-            # Write-Output "Creating PR"
-            # hub pull-request -b dev -h $newBranch -m $PRMessage
+        if (!(Test-Path $buildDir)) {
+            New-Item -Path $buildDir -ItemType Directory
         }
-        else
-        {
+
+        $publicUrl = "https://raw.githubusercontent.com/aspnet/Common/dev/.vsts-pipelines/builds/ci-public.yml"
+        $publicFile = Join-Path $buildDir "ci-public.yml"
+
+        $internalUrl = "https://raw.githubusercontent.com/aspnet/Common/dev/.vsts-pipelines/builds/ci-internal.yml"
+        $internalFile = Join-Path $buildDir "ci-internal.yml"
+
+        if (!(Test-Path -Path $publicFile)) {
+            Invoke-WebRequest -Uri $publicUrl -OutFile $publicFile
+        }
+        
+        if (!(Test-Path -Path $internalFile)) {
+            Invoke-WebRequest -Uri $internalUrl -OutFile $internalFile
+        }
+
+        if (!$test) {
+            Write-Output "Creating PR for $repo"
+            git add $buildDir
+            git commit -am $message
+            git push -f origin HEAD:$newBranch
+            Create-PR $newBranch $message
+        }
+        else {
             Write-Output "Didn't commit cause this is a test."
         }
+        Write-Output "\n"
     }
-    finally{
-        Set-Location ".."
+    finally {
+        Pop-Location
     }
 }
